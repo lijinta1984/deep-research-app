@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import logging
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
@@ -47,7 +48,7 @@ async def decompose_query(query: str, depth: str) -> list[str]:
         # Strip markdown fences if model adds them despite instructions
         if raw.startswith("```"):
             raw = raw.split("```")[1]
-            if raw.startswith("json"):
+            if raw.lower().startswith("json"):
                 raw = raw[4:]
         subquestions = json.loads(raw)
         if isinstance(subquestions, list) and all(isinstance(q, str) for q in subquestions):
@@ -56,5 +57,5 @@ async def decompose_query(query: str, depth: str) -> list[str]:
         pass
 
     # Fallback: split by newlines and strip numbering
-    lines = [line.strip().lstrip("0123456789.-) ") for line in raw.split("\n") if line.strip()]
+    lines = [re.sub(r'^\s*\d+[.)\-]\s*', '', line.strip()) for line in raw.split("\n") if line.strip()]
     return [l for l in lines if len(l) > 5]
