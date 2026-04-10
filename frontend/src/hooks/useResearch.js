@@ -71,12 +71,17 @@ export function useResearch() {
 
   const loadSession = async (id) => {
     closeActiveStream()
-    const { data } = await api.get(`/api/sessions/${id}`)
-    setReport(data.report || "")
-    setSources(JSON.parse(data.sources_json || "[]"))
-    setStatus(data.status === "failed" ? "error" : data.status === "complete" ? "complete" : "idle")
-    setSteps(data.status === "failed" ? [{ type: "error", message: "This research session failed." }] : [])
-    setSessionId(id)
+    try {
+      const { data } = await api.get(`/api/sessions/${id}`)
+      setReport(data.report || "")
+      setSources(JSON.parse(data.sources_json || "[]"))
+      setStatus(data.status === "failed" ? "error" : data.status === "complete" ? "complete" : "idle")
+      setSteps(data.status === "failed" ? [{ type: "error", message: "This research session failed." }] : [])
+      setSessionId(id)
+    } catch (err) {
+      setSteps([{ type: "error", message: err.message || "Failed to load session" }])
+      setStatus("error")
+    }
   }
 
   const resetSession = () => {

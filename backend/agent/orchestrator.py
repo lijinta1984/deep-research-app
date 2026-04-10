@@ -112,9 +112,12 @@ async def run_research(
         logger.error(
             f"Orchestrator failed for session {session_id}: {e}", exc_info=True
         )
-        await asyncio.to_thread(
-            save_session, session_id, request.query, request.depth, "failed", "", []
-        )
+        try:
+            await asyncio.to_thread(
+                save_session, session_id, request.query, request.depth, "failed", "", []
+            )
+        except Exception as save_err:
+            logger.error(f"Failed to persist failed session {session_id}: {save_err}")
         await queue.put(
             ResearchStep(type="error", message=f"Research failed: {str(e)}")
         )
