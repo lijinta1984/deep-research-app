@@ -26,11 +26,21 @@ def _sync_search(question: str, max_sources: int) -> list[SourceResult]:
         },
     )
 
+    # Firecrawl SDK v0.0.16 search() returns response['data'] directly — a list of dicts.
+    # Newer versions may return a SearchResponse object with a .data attribute.
+    items = results.data if hasattr(results, "data") else results
+
     sources = []
-    for item in results.data:
-        url = getattr(item, "url", "") or ""
-        title = getattr(item, "title", "") or url
-        content = getattr(item, "markdown", "") or getattr(item, "content", "") or ""
+    for item in items:
+        # Handle both dict (v0.0.16) and object (newer SDK) responses
+        if isinstance(item, dict):
+            url = item.get("url", "") or ""
+            title = item.get("title", "") or url
+            content = item.get("markdown", "") or item.get("content", "") or ""
+        else:
+            url = getattr(item, "url", "") or ""
+            title = getattr(item, "title", "") or url
+            content = getattr(item, "markdown", "") or getattr(item, "content", "") or ""
 
         if not content:
             continue

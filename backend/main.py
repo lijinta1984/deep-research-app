@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, BackgroundTasks, Request
@@ -15,11 +16,26 @@ from backend.models.schemas import ResearchRequest, ResearchStep
 load_dotenv()
 
 
+QUEUE_TTL_SECONDS = 600  # 10 minutes — abandon threshold for unread queues
+
+
+async def _cleanup_stale_queues(app: FastAPI):
+    """Periodic task that removes queues older than QUEUE_TTL_SECONDS."""
+    while True:
+        await asyncio.sleep(60)
+        now = time.time()
+        stale = [sid for sid, (_, ts) in app.state.queues.items() if now - ts > QUEUE_TTL_SECONDS]
+        for sid in stale:
+            app.state.queues.pop(sid, None)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.queues = {}
+    app.state.queues = {}  # {session_id: (asyncio.Queue, created_timestamp)}
     init_db()
+    cleanup_task = asyncio.create_task(_cleanup_stale_queues(app))
     yield
+    cleanup_task.cancel()
 
 
 app = FastAPI(title="Deep Research API", lifespan=lifespan)
@@ -39,7 +55,7 @@ app.add_middleware(
 async def start_research(request: ResearchRequest, background_tasks: BackgroundTasks):
     session_id = str(uuid.uuid4())
     queue = asyncio.Queue()
-    app.state.queues[session_id] = queue
+    app.state.queues[session_id] = (queue, time.time())
     background_tasks.add_task(run_research, request, session_id, queue)
     return {"session_id": session_id}
 
@@ -47,9 +63,13 @@ async def start_research(request: ResearchRequest, background_tasks: BackgroundT
 @app.get("/api/research/{session_id}/stream")
 async def stream_research(session_id: str, request: Request):
     async def event_generator():
-        queue = app.state.queues.get(session_id)
-        if not queue:
+        entry = app.state.queues.get(session_id)
+        if not entry:
             yield {"data": json.dumps({"type": "error", "message": "Session not found"})}
+            return
+        queue = entry[0]
+        if not queue:
+            yield {"data": json.dumps({"type": "error", "message": "Queue is empty"})}
             return
 
         while True:
