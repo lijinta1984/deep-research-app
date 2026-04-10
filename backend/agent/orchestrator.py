@@ -85,13 +85,14 @@ async def run_research(
         )
 
         # --- Step 4: Persist session ---
-        save_session(
-            id=session_id,
-            query=request.query,
-            depth=request.depth,
-            status="complete",
-            report=report,
-            sources=all_sources,
+        await asyncio.to_thread(
+            save_session,
+            session_id,
+            request.query,
+            request.depth,
+            "complete",
+            report,
+            all_sources,
         )
 
         # --- Step 5: Signal completion ---
@@ -111,7 +112,9 @@ async def run_research(
         logger.error(
             f"Orchestrator failed for session {session_id}: {e}", exc_info=True
         )
-        save_session(session_id, request.query, request.depth, "failed", "", [])
+        await asyncio.to_thread(
+            save_session, session_id, request.query, request.depth, "failed", "", []
+        )
         await queue.put(
             ResearchStep(type="error", message=f"Research failed: {str(e)}")
         )
