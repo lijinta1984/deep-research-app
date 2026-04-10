@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  aside, header, .query-input, .progress-panel, .export-bar {
+    display: none !important;
+  }
+  article.prose {
+    width: 100%;
+    max-width: 100%;
+  }
+}
