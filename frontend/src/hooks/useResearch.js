@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import api from "../utils/api"
 
 export function useResearch() {
@@ -8,7 +8,17 @@ export function useResearch() {
   const [sources, setSources] = useState([])
   const [status, setStatus] = useState("idle") // idle | running | complete | error
 
+  const esRef = useRef(null)
+
+  const closeActiveStream = () => {
+    if (esRef.current) {
+      esRef.current.close()
+      esRef.current = null
+    }
+  }
+
   const startResearch = async (query, depth) => {
+    closeActiveStream()
     setStatus("running")
     setSteps([])
     setReport("")
@@ -22,6 +32,7 @@ export function useResearch() {
 
       // Open SSE stream
       const es = new EventSource(`/api/research/${id}/stream`)
+      esRef.current = es
 
       es.onmessage = (event) => {
         const step = JSON.parse(event.data)
@@ -34,17 +45,20 @@ export function useResearch() {
           setSources(step.data.sources || [])
           setStatus("complete")
           es.close()
+          esRef.current = null
         }
 
         if (step.type === "error") {
           setStatus("error")
           es.close()
+          esRef.current = null
         }
       }
 
       es.onerror = () => {
         setStatus("error")
         es.close()
+        esRef.current = null
       }
     } catch (err) {
       setSteps((prev) => [
@@ -56,6 +70,7 @@ export function useResearch() {
   }
 
   const loadSession = async (id) => {
+    closeActiveStream()
     const { data } = await api.get(`/api/sessions/${id}`)
     setReport(data.report || "")
     setSources(JSON.parse(data.sources_json || "[]"))
@@ -65,6 +80,7 @@ export function useResearch() {
   }
 
   const resetSession = () => {
+    closeActiveStream()
     setStatus("idle")
     setSteps([])
     setReport("")

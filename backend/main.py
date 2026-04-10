@@ -72,15 +72,15 @@ async def stream_research(session_id: str, request: Request):
 
 @app.get("/api/sessions")
 async def get_sessions():
-    return list_sessions(limit=20)
+    return await asyncio.to_thread(list_sessions, 20)
 
 
 @app.get("/api/sessions/{session_id}")
 async def get_session_by_id(session_id: str):
-    return get_session(session_id)
+    return await asyncio.to_thread(get_session, session_id)
 
 
 @app.delete("/api/sessions/{session_id}")
 async def remove_session(session_id: str):
-    delete_session(session_id)
+    await asyncio.to_thread(delete_session, session_id)
     return {"deleted": True}
