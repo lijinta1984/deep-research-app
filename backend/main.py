@@ -54,6 +54,7 @@ async def stream_research(session_id: str, request: Request):
 
         while True:
             if await request.is_disconnected():
+                app.state.queues.pop(session_id, None)
                 break
             try:
                 step = await asyncio.wait_for(queue.get(), timeout=1.0)

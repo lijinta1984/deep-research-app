@@ -14,36 +14,44 @@ export function useResearch() {
     setReport("")
     setSources([])
 
-    // Create session and get session_id
-    const { data } = await api.post("/api/research", { query, depth })
-    const id = data.session_id
-    setSessionId(id)
+    try {
+      // Create session and get session_id
+      const { data } = await api.post("/api/research", { query, depth })
+      const id = data.session_id
+      setSessionId(id)
 
-    // Open SSE stream
-    const es = new EventSource(`/api/research/${id}/stream`)
+      // Open SSE stream
+      const es = new EventSource(`/api/research/${id}/stream`)
 
-    es.onmessage = (event) => {
-      const step = JSON.parse(event.data)
-      if (step.type === "ping") return
+      es.onmessage = (event) => {
+        const step = JSON.parse(event.data)
+        if (step.type === "ping") return
 
-      setSteps((prev) => [...prev, step])
+        setSteps((prev) => [...prev, step])
 
-      if (step.type === "complete") {
-        setReport(step.data.report)
-        setSources(step.data.sources || [])
-        setStatus("complete")
-        es.close()
+        if (step.type === "complete") {
+          setReport(step.data.report)
+          setSources(step.data.sources || [])
+          setStatus("complete")
+          es.close()
+        }
+
+        if (step.type === "error") {
+          setStatus("error")
+          es.close()
+        }
       }
 
-      if (step.type === "error") {
+      es.onerror = () => {
         setStatus("error")
         es.close()
       }
-    }
-
-    es.onerror = () => {
+    } catch (err) {
+      setSteps((prev) => [
+        ...prev,
+        { type: "error", message: err.message || "Failed to start research session" },
+      ])
       setStatus("error")
-      es.close()
     }
   }
 
@@ -51,8 +59,8 @@ export function useResearch() {
     const { data } = await api.get(`/api/sessions/${id}`)
     setReport(data.report || "")
     setSources(JSON.parse(data.sources_json || "[]"))
-    setStatus("complete")
-    setSteps([])
+    setStatus(data.status === "failed" ? "error" : data.status === "complete" ? "complete" : "idle")
+    setSteps(data.status === "failed" ? [{ type: "error", message: "This research session failed." }] : [])
     setSessionId(id)
   }
 
