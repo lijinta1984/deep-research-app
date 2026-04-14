@@ -4,10 +4,10 @@ from datetime import datetime
 from celery import Celery
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.api.dependencies import settings
 from backend.db.models import ResearchJobModel
-from backend.db.session import async_session_factory
 from backend.research.engine import ResearchEngine
 
 celery_app = Celery("deep_research", broker=settings.redis_url, backend=settings.redis_url)
@@ -33,16 +33,25 @@ def _run_async(coro):  # type: ignore[no-untyped-def]
 
 
 async def _update_job_field(job_id: str, **kwargs) -> None:  # type: ignore[no-untyped-def]
-    """Update specific fields on a research job in the database."""
-    async with async_session_factory() as session:
-        stmt = select(ResearchJobModel).where(ResearchJobModel.job_id == job_id)
-        result = await session.execute(stmt)
-        job = result.scalar_one_or_none()
-        if job is None:
-            return
-        for key, value in kwargs.items():
-            setattr(job, key, value)
-        await session.commit()
+    """Update specific fields on a research job in the database.
+
+    Creates a fresh async engine per call to avoid event-loop mismatch
+    when running inside Celery's sync workers via _run_async().
+    """
+    _engine = create_async_engine(settings.database_url, echo=False)
+    _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
+    try:
+        async with _session_factory() as session:
+            stmt = select(ResearchJobModel).where(ResearchJobModel.job_id == job_id)
+            result = await session.execute(stmt)
+            job = result.scalar_one_or_none()
+            if job is None:
+                return
+            for key, value in kwargs.items():
+                setattr(job, key, value)
+            await session.commit()
+    finally:
+        await _engine.dispose()
 
 
 @celery_app.task(name="run_research", bind=True, max_retries=0)
@@ -94,11 +103,14 @@ def run_research_task(self, job_id: str, query: str, depth: int, max_sources: in
 
     except Exception as exc:
         logger.error("Research task failed for job_id={}: {}", job_id, exc)
-        _run_async(
-            _update_job_field(
-                job_id,
-                status="failed",
-                error_message=str(exc),
+        try:
+            _run_async(
+                _update_job_field(
+                    job_id,
+                    status="failed",
+                    error_message=str(exc),
+                )
             )
-        )
+        except Exception as db_exc:
+            logger.error("Failed to update job status for job_id={}: {}", job_id, db_exc)
         raise

@@ -31,12 +31,20 @@ function confidenceVariant(level: ConfidenceLevel): 'high' | 'medium' | 'low' {
   return level
 }
 
+function safeFaviconUrl(url: string): string {
+  try {
+    return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=16`
+  } catch {
+    return ''
+  }
+}
+
 function flattenTree(
   node: SearchTreeNode,
   nodes: Node[],
   edges: Edge[],
   depth: number = 0,
-  index: number = 0,
+  counter: { value: number } = { value: 0 },
 ): void {
   const colorMap: Record<string, string> = {
     root: '#1e293b',
@@ -45,10 +53,13 @@ function flattenTree(
     source: '#6b7280',
   }
 
+  const xIndex = counter.value
+  counter.value += 1
+
   nodes.push({
     id: node.id,
     data: { label: node.label, url: node.url, nodeType: node.node_type },
-    position: { x: index * 220, y: depth * 120 },
+    position: { x: xIndex * 220, y: depth * 120 },
     style: {
       background: colorMap[node.node_type] ?? '#6b7280',
       color: '#fff',
@@ -63,14 +74,14 @@ function flattenTree(
     },
   })
 
-  node.children.forEach((child, i) => {
+  node.children.forEach((child) => {
     edges.push({
       id: `${node.id}-${child.id}`,
       source: node.id,
       target: child.id,
       animated: child.node_type === 'source',
     })
-    flattenTree(child, nodes, edges, depth + 1, index + i)
+    flattenTree(child, nodes, edges, depth + 1, counter)
   })
 }
 
@@ -333,7 +344,7 @@ export default function Result() {
                     className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-accent transition-colors"
                   >
                     <img
-                      src={`https://www.google.com/s2/favicons?domain=${new URL(src.url).hostname}&sz=16`}
+                      src={safeFaviconUrl(src.url)}
                       alt=""
                       className="w-4 h-4 mt-0.5 flex-shrink-0"
                     />
