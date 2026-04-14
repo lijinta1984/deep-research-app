@@ -22,7 +22,10 @@ export default function ProgressPage() {
     queryKey: ['progress', jobId],
     queryFn: () => api.getStatus(jobId!),
     enabled: !!jobId,
-    refetchInterval: 2000,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === 'complete' || status === 'failed' ? false : 2000
+    },
   })
 
   useEffect(() => {
