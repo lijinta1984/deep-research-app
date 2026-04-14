@@ -226,7 +226,7 @@ class ResearchEngine:
         """Generate 5-8 search queries from a research topic."""
         queries = [
             topic,
-            f"{topic} latest developments 2024",
+            f"{topic} latest developments {datetime.now().year}",
             f"{topic} key players and companies",
             f"{topic} challenges and limitations",
             f"{topic} market analysis",
@@ -485,9 +485,11 @@ class ResearchEngine:
         # Pass 2 (if depth >= 2 and there are gaps)
         if depth >= 2 and len(pass_1_output.gaps) > 0:
             await self._report_progress(progress=40, current_pass=2)
+            # depth=3 (Deep) uses more sources per gap for thorough research
+            sources_per_gap = 4 if depth >= 3 else 2
             pass_2_output, pass_2_sources, pass_2_tree = await self.run_pass_2(
                 pass_1_output,
-                max_sources_per_gap=2,
+                max_sources_per_gap=sources_per_gap,
             )
             for node in pass_2_tree:
                 if node.parent_id is None and node.node_type == "gap":
