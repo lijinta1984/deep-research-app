@@ -60,11 +60,11 @@ def run_research_task(self, job_id: str, query: str, depth: int, max_sources: in
     """Execute the multi-pass research pipeline as a Celery task."""
     logger.info("Starting research task for job_id={}", job_id)
 
-    _run_async(
-        _update_job_field(job_id, status="running")
-    )
-
     try:
+        _run_async(
+            _update_job_field(job_id, status="running")
+        )
+
         async def _progress_cb(**kwargs: Any) -> None:
             """Async callback invoked by the engine to report incremental progress."""
             await _update_job_field(job_id, **kwargs)
