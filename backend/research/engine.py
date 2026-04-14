@@ -1,7 +1,9 @@
 import asyncio
 import json
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import datetime
+from typing import Any
 
 import httpx
 from loguru import logger
@@ -17,11 +19,16 @@ from backend.research.schemas import (
     SearchTreeNode,
 )
 
+ProgressCallback = Callable[..., Awaitable[None]]
+
 
 class ResearchEngine:
     """Core 3-pass research engine using Firecrawl + Kimi K2."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        progress_callback: ProgressCallback | None = None,
+    ) -> None:
         self.llm = AsyncOpenAI(
             api_key=settings.moonshot_api_key,
             base_url="https://api.moonshot.ai/v1",
@@ -31,6 +38,15 @@ class ResearchEngine:
         self.model = "moonshot-v1-128k"
         self.sources: list[ScrapedSource] = []
         self.tree_nodes: list[SearchTreeNode] = []
+        self._progress_callback = progress_callback
+
+    async def _report_progress(self, **kwargs: Any) -> None:
+        """Report incremental progress via callback if available."""
+        if self._progress_callback is not None:
+            try:
+                await self._progress_callback(**kwargs)
+            except Exception as exc:
+                logger.warning("Progress callback failed: {}", exc)
 
     async def _call_kimi(self, system_prompt: str, user_content: str) -> str:
         """Call Kimi K2 with exponential backoff retry."""
@@ -224,7 +240,6 @@ class ResearchEngine:
         self,
         query: str,
         max_sources: int,
-        progress_callback: object = None,
     ) -> tuple[Pass1Output, list[ScrapedSource], list[SearchTreeNode]]:
         """PASS 1 — Broad Search."""
         logger.info("Starting Pass 1 for query: {}", query)
@@ -239,6 +254,7 @@ class ResearchEngine:
             for q in search_queries
         ]
         search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+        await self._report_progress(progress=10, current_pass=1)
 
         all_urls: list[str] = []
         seen_urls: set[str] = set()
@@ -274,6 +290,10 @@ class ResearchEngine:
 
         scraped = await self._scrape_urls(all_urls, pass_number=1)
         self.sources.extend(scraped)
+        total_scraped = sum(1 for s in self.sources if s.scrape_success)
+        await self._report_progress(
+            progress=20, current_pass=1, sources_scraped=total_scraped,
+        )
 
         successful = [s for s in scraped if s.scrape_success and s.markdown_content]
         if not successful:
@@ -299,13 +319,18 @@ class ResearchEngine:
             len(output.synthesis.key_findings),
             len(output.gaps),
         )
+        await self._report_progress(
+            progress=35,
+            current_pass=1,
+            gaps_found=len(output.gaps),
+            partial_synthesis=output.synthesis.overview,
+        )
         return output, scraped, tree_nodes
 
     async def run_pass_2(
         self,
         pass_1_output: Pass1Output,
         max_sources_per_gap: int = 2,
-        progress_callback: object = None,
     ) -> tuple[Pass2Output, list[ScrapedSource], list[SearchTreeNode]]:
         """PASS 2 — Gap Resolution."""
         logger.info("Starting Pass 2: resolving {} gaps", len(pass_1_output.gaps))
@@ -351,6 +376,10 @@ class ResearchEngine:
             all_gap_sources.extend(scraped)
 
         self.sources.extend(all_gap_sources)
+        total_scraped = sum(1 for s in self.sources if s.scrape_success)
+        await self._report_progress(
+            progress=50, current_pass=2, sources_scraped=total_scraped,
+        )
 
         successful = [
             s for s in all_gap_sources if s.scrape_success and s.markdown_content
@@ -382,6 +411,7 @@ class ResearchEngine:
             len(output.gaps_resolved),
             len(output.remaining_gaps),
         )
+        await self._report_progress(progress=65, current_pass=2)
         return output, all_gap_sources, tree_nodes
 
     async def run_pass_3(
@@ -393,6 +423,7 @@ class ResearchEngine:
     ) -> Pass3Output:
         """PASS 3 — Final Synthesis."""
         logger.info("Starting Pass 3: final synthesis")
+        await self._report_progress(progress=75, current_pass=3)
 
         source_list = []
         for s in all_sources:
@@ -417,6 +448,7 @@ class ResearchEngine:
         )
         output = Pass3Output.model_validate(result_dict)
         logger.info("Pass 3 complete: final report generated")
+        await self._report_progress(progress=90, current_pass=3)
         return output
 
     async def run(
@@ -424,7 +456,6 @@ class ResearchEngine:
         query: str,
         depth: int = 2,
         max_sources: int = 10,
-        progress_callback: object = None,
     ) -> dict:
         """Run the full multi-pass research pipeline."""
         self.sources = []
@@ -437,9 +468,11 @@ class ResearchEngine:
             pass_number=1,
         )
 
+        await self._report_progress(progress=5, current_pass=1)
+
         # Pass 1
         pass_1_output, pass_1_sources, pass_1_tree = await self.run_pass_1(
-            query, max_sources, progress_callback
+            query, max_sources
         )
         for node in pass_1_tree:
             if node.parent_id is None or node.node_type == "query":
@@ -451,10 +484,10 @@ class ResearchEngine:
 
         # Pass 2 (if depth >= 2 and there are gaps)
         if depth >= 2 and len(pass_1_output.gaps) > 0:
+            await self._report_progress(progress=40, current_pass=2)
             pass_2_output, pass_2_sources, pass_2_tree = await self.run_pass_2(
                 pass_1_output,
                 max_sources_per_gap=2,
-                progress_callback=progress_callback,
             )
             for node in pass_2_tree:
                 if node.parent_id is None and node.node_type == "gap":

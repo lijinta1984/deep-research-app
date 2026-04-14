@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from typing import Any
 
 from celery import Celery
 from loguru import logger
@@ -60,11 +61,15 @@ def run_research_task(self, job_id: str, query: str, depth: int, max_sources: in
     logger.info("Starting research task for job_id={}", job_id)
 
     _run_async(
-        _update_job_field(job_id, status="running", current_pass=1, progress=5)
+        _update_job_field(job_id, status="running")
     )
 
     try:
-        engine = ResearchEngine()
+        async def _progress_cb(**kwargs: Any) -> None:
+            """Async callback invoked by the engine to report incremental progress."""
+            await _update_job_field(job_id, **kwargs)
+
+        engine = ResearchEngine(progress_callback=_progress_cb)
         results = _run_async(
             engine.run(query=query, depth=depth, max_sources=max_sources)
         )
