@@ -1,14 +1,21 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from backend.api.dependencies import _fix_database_url
 from backend.db.session import Base
 from backend.db.models import ResearchJobModel  # noqa: F401
 
 config = context.config
+
+# Override alembic.ini URL with DATABASE_URL env var if available (needed for Render)
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    config.set_main_option("sqlalchemy.url", _fix_database_url(database_url))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
