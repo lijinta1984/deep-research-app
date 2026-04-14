@@ -1,0 +1,38 @@
+# Render.com Blueprint — deploys the full Deep Research app
+# Deploy via: https://render.com/deploy?repo=https://github.com/lijinta1984/deep-research-app
+
+databases:
+  - name: deep-research-db
+    plan: free
+    databaseName: deepresearch
+    user: deepresearch
+
+services:
+  - type: redis
+    name: deep-research-redis
+    plan: free
+    ipAllowList: []
+
+  - type: web
+    name: deep-research-app
+    plan: free
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deep-research-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: deep-research-redis
+          type: redis
+          property: connectionString
+      - key: MOONSHOT_API_KEY
+        sync: false
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: MAX_CONCURRENT_JOBS
+        value: "2"
