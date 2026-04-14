@@ -1,7 +1,11 @@
+import os
 import sys
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
 from loguru import logger
 
 from backend.api.routes import router as research_router
@@ -44,3 +48,17 @@ async def startup() -> None:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Serve frontend static files if the /app/static directory exists (Render deployment)
+_static_dir = Path("/app/static")
+if _static_dir.is_dir():
+    _static_resolved = _static_dir.resolve()
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str) -> FileResponse:
+        """Serve the React SPA — return index.html for all non-API routes."""
+        file_path = (_static_dir / full_path).resolve()
+        if file_path.is_file() and str(file_path).startswith(str(_static_resolved)):
+            return FileResponse(file_path)
+        return FileResponse(_static_dir / "index.html")
