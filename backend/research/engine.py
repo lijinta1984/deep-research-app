@@ -24,7 +24,7 @@ class ResearchEngine:
     def __init__(self) -> None:
         self.llm = AsyncOpenAI(
             api_key=settings.moonshot_api_key,
-            base_url="https://api.moonshot.cn/v1",
+            base_url="https://api.moonshot.ai/v1",
         )
         self.firecrawl_api_key = settings.firecrawl_api_key
         self.firecrawl_base = "https://api.firecrawl.dev/v1"
