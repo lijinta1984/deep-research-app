@@ -151,6 +151,23 @@ class ResearchEngine:
             return " ".join(words[:max_words])
         return content
 
+    def _truncate_combined(self, content: str, max_words: int = 80000) -> str:
+        """Truncate combined content to fit within model context window.
+
+        The moonshot-v1-128k model has a 131072 token limit. Roughly
+        1 word ~= 1.3 tokens, so 80k words ~= 104k tokens, leaving
+        room for the system prompt (~2k tokens) and output (4096 tokens).
+        """
+        words = content.split()
+        if len(words) > max_words:
+            logger.warning(
+                "Combined content truncated from {} to {} words",
+                len(words),
+                max_words,
+            )
+            return " ".join(words[:max_words])
+        return content
+
     async def _scrape_urls(
         self,
         urls: list[str],
@@ -271,6 +288,7 @@ class ResearchEngine:
             f"Research Topic: {query}\n\n"
             + "\n".join(context_parts)
         )
+        combined_content = self._truncate_combined(combined_content)
 
         result_dict = await self._call_kimi_with_validation(
             PASS_1_SYSTEM, combined_content, Pass1Output
@@ -353,6 +371,7 @@ class ResearchEngine:
             + "\n\n## New Scraped Content for Gap Resolution\n"
             + "\n".join(gap_content_parts)
         )
+        user_msg = self._truncate_combined(user_msg)
 
         result_dict = await self._call_kimi_with_validation(
             PASS_2_SYSTEM, user_msg, Pass2Output
@@ -391,6 +410,7 @@ class ResearchEngine:
                 f"## Pass 2 Output\n{pass_2_output.model_dump_json(indent=2)}\n\n"
             )
         user_msg += f"## All Sources\n{json.dumps(source_list, indent=2)}"
+        user_msg = self._truncate_combined(user_msg)
 
         result_dict = await self._call_kimi_with_validation(
             PASS_3_SYSTEM, user_msg, Pass3Output
