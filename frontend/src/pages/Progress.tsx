@@ -97,17 +97,20 @@ export default function ProgressPage() {
             {/* Pass Indicator */}
             <div className="flex items-center justify-between gap-2">
               {[1, 2, 3].map((pass) => {
-                const isActive = progress.current_pass === pass
-                const isComplete = progress.current_pass > pass
+                const isSkipped = pass === 2 && progress.depth < 2
+                const isActive = !isSkipped && progress.current_pass === pass
+                const isComplete = !isSkipped && progress.current_pass > pass
                 return (
                   <div
                     key={pass}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg border flex-1 text-center justify-center ${
-                      isActive
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : isComplete
-                          ? 'border-green-500/30 bg-green-500/10 text-green-400'
-                          : 'border-border text-muted-foreground'
+                      isSkipped
+                        ? 'border-border/50 bg-muted/30 text-muted-foreground/50 line-through'
+                        : isActive
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : isComplete
+                            ? 'border-green-500/30 bg-green-500/10 text-green-400'
+                            : 'border-border text-muted-foreground'
                     }`}
                   >
                     {isComplete ? (

@@ -133,6 +133,7 @@ export interface ResearchJobResponse {
 export interface ResearchProgress {
   job_id: string;
   status: JobStatus;
+  depth: ResearchDepth;
   progress: number;
   current_pass: number;
   sources_scraped: number;

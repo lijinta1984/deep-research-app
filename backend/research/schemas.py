@@ -120,6 +120,7 @@ class ResearchJobResponse(BaseModel):
 class ResearchProgress(BaseModel):
     job_id: str
     status: JobStatus
+    depth: ResearchDepth = 2
     progress: int = Field(..., ge=0, le=100)
     current_pass: int = Field(..., ge=0, le=3)
     sources_scraped: int = 0

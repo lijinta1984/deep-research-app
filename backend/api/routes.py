@@ -80,6 +80,7 @@ async def get_status(
     return ResearchProgress(
         job_id=job.job_id,
         status=job.status,
+        depth=job.depth,
         progress=job.progress,
         current_pass=job.current_pass,
         sources_scraped=job.sources_scraped,

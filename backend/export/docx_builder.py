@@ -166,7 +166,7 @@ def build_markdown(
         lines.append("| # | Title | URL | Pass |")
         lines.append("|---|-------|-----|------|")
         for i, src in enumerate(pass_3.sources, 1):
-            lines.append(f"| {i} | {src.title} | {src.url} | {src.found_in_pass} |")
+            lines.append(f"| {i} | {src.title.replace('|', '\\|')} | {src.url.replace('|', '\\|')} | {src.found_in_pass} |")
         lines.append("")
 
     return "\n".join(lines)
